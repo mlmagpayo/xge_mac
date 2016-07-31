@@ -35,6 +35,8 @@
 ////                                                              ////
 //////////////////////////////////////////////////////////////////////
 
+`include "defines.v"
+
 /* synthesis ramstyle = "M4K" */
 
 module generic_mem_medium(
@@ -59,8 +61,6 @@ module generic_mem_medium(
 parameter DWIDTH = 32;
 parameter AWIDTH = 3;
 parameter RAM_DEPTH = (1 << AWIDTH);
-parameter SYNC_WRITE = 1;
-parameter SYNC_READ = 1;
 parameter REGISTER_READ = 0;
 
 //---
@@ -69,14 +69,14 @@ parameter REGISTER_READ = 0;
 input               wclk;
 input               wrst_n;
 input               wen;
-input  [AWIDTH:0]   waddr;
+input  [AWIDTH-1:0] waddr;
 input  [DWIDTH-1:0] wdata;
 
 input               rclk;
 input               rrst_n;
 input               ren;
 input               roen;
-input  [AWIDTH:0]   raddr;
+input  [AWIDTH-1:0] raddr;
 output [DWIDTH-1:0] rdata;
 
 // Registered outputs
@@ -89,7 +89,7 @@ reg    [DWIDTH-1:0] rdata;
 // Registers
 
 reg  [DWIDTH-1:0] mem_rdata;
-
+reg  [AWIDTH-1:0] raddr_d1;
 
 // Memory
 
@@ -103,54 +103,64 @@ integer         i;
 //---
 // Memory Write
 
-generate
-    if (SYNC_WRITE) begin
-
-        // Generate synchronous write
-        always @(posedge wclk)
-        begin
-            if (wen) begin
-                mem[waddr[AWIDTH-1:0]] <= wdata;
-            end
-        end
+// Generate synchronous write
+always @(posedge wclk)
+begin
+    if (wen) begin
+        mem[waddr[AWIDTH-1:0]] <= wdata;
     end
-    else begin
-
-        // Generate asynchronous write
-        always @(wen, waddr, wdata)
-        begin
-            if (wen) begin
-                mem[waddr[AWIDTH-1:0]] = wdata;
-            end
-        end
-    end
-endgenerate
+end
 
 //---
 // Memory Read
 
-generate
-    if (SYNC_READ) begin
+// Generate registered memory read
 
-        // Generate registered memory read
-        always @(posedge rclk or negedge rrst_n)
-        begin
-            if (!rrst_n) begin
-                mem_rdata <= {(DWIDTH){1'b0}};
-            end else if (ren) begin
-                mem_rdata <= mem[raddr[AWIDTH-1:0]];
-            end
-        end
-    end
-    else begin
+`ifdef XIL
 
-        // Generate unregisters memory read
-        always @(raddr, rclk)
-        begin
-            mem_rdata = mem[raddr[AWIDTH-1:0]];
-        end
+//always @(posedge rclk)
+//begin
+//    if (ren) begin
+//        raddr_d1 <= raddr;
+//    end
+//end
+//always @(raddr_d1, rclk)
+//begin
+//    mem_rdata = mem[raddr_d1[AWIDTH-1:0]];
+//end
+
+always @(posedge rclk)
+begin
+    if (!rrst_n) begin
+        mem_rdata <= {(DWIDTH){1'b0}};
+    end else if (ren) begin
+        mem_rdata <= mem[raddr[AWIDTH-1:0]];
     end
-endgenerate
+end
+
+`else
+
+//always @(posedge rclk or negedge rrst_n)
+//begin
+//    if (!rrst_n) begin
+//        mem_rdata <= {(DWIDTH){1'b0}};
+//    end else if (ren) begin
+//        mem_rdata <= mem[raddr[AWIDTH-1:0]];
+//    end
+//end
+
+always @(posedge rclk)
+begin
+    if (ren) begin
+        raddr_d1 <= raddr;
+    end
+end
+always @(raddr_d1, rclk)
+begin
+    mem_rdata = mem[raddr_d1[AWIDTH-1:0]];
+end
+
+`endif
 
 generate
     if (REGISTER_READ) begin
@@ -178,6 +188,3 @@ generate
 endgenerate
 
 endmodule
-
-
-

@@ -55,6 +55,7 @@ sc_fifo<packet_t*> * xgmii_if::get_rx_fifo_ptr() {
 void xgmii_if::init(void) {
     allow_idle_errors = false;
     disable_padding = false;
+    inject_noise = false;
 }
 
 void xgmii_if::connect_scoreboard(scoreboard *sbptr, scoreboard::sbSourceId sid) {
@@ -69,6 +70,15 @@ void xgmii_if::transmit() {
     sc_uint<64> txd = 0;
     sc_uint<8> txc = 0;
 
+    int64_t noise [] = {0x1, 0xd5555555555555fb,
+                        0x1, 0xd5555555555555fb,
+                        0x1, 0xd5555555555555fc,
+                        0x0, 0xd5555555555555fb,
+                        0x1, 0xd5555555555555fb,
+                        0x0, 0xd5555555555555fb,
+                        0x1, 0x1111111111111111,
+                        };
+
     int lane = 0;
     int bytecnt = 0;
     int length = 0;
@@ -80,6 +90,8 @@ void xgmii_if::transmit() {
     int fault_byte = 0;
     int fault_spacing;
     int fault_spacing_cnt = 0;
+    int count = 0;
+    int i = 0;
 
     while (true) {
 
@@ -94,7 +106,7 @@ void xgmii_if::transmit() {
 
             //---
             // Inject errors
-            
+
             if (pkt->err_flags & PKT_FLAG_ERR_CRC) {
                 pkt->crc++;
             }
@@ -227,7 +239,7 @@ void xgmii_if::transmit() {
             ifg = 0;
 
         }
-        else if (preamblecnt >7 && bytecnt == pkt->err_info && 
+        else if (preamblecnt >7 && bytecnt == pkt->err_info &&
                  (pkt->err_flags & PKT_FLAG_ERR_CODING)) {
 
             //---
@@ -264,7 +276,19 @@ void xgmii_if::transmit() {
             txd |= ((sc_uint<64>)0x07) << (8 * lane);
             txc |= 0x01 << lane;
         }
-        if (lane == 7) {
+        if (inject_noise) {
+            for (count = 0; count < 10000; count += 2) {
+                i = 2 * (random() % (sizeof(noise)/16));
+                cout << "NOISE: " << hex << noise[i] << " " << noise[i+1] << dec << endl;
+                xgmii_rxd = noise[i+1];
+                xgmii_rxc = noise[i];
+                txd = 0;
+                txc = 0;
+                wait();
+            }
+            inject_noise = false;
+        }
+        else if (lane == 7) {
             xgmii_rxd = txd;
             xgmii_rxc = txc;
             txd = 0;
@@ -451,7 +475,7 @@ void xgmii_if::monitor() {
 
         if (((rxd & 0xffffffff) == 0x0100009c && (rxc & 0xf) == 0x1) &&
             (((rxd >> 32) & 0xffffffff) == 0x0100009c && ((rxc > 4) & 0xf) == 0x1)) {
-            
+
             //--
             // Local fault detection
 
@@ -500,5 +524,3 @@ void xgmii_if::monitor() {
         wait();
     }
 };
-
-

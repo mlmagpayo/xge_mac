@@ -40,13 +40,13 @@
 
 module xge_mac(/*AUTOARG*/
   // Outputs
-  xgmii_txd, xgmii_txc, wb_int_o, wb_dat_o, wb_ack_o, pkt_tx_full, 
-  pkt_rx_val, pkt_rx_sop, pkt_rx_mod, pkt_rx_err, pkt_rx_eop, 
-  pkt_rx_data, pkt_rx_avail, 
+  xgmii_txd, xgmii_txc, wb_int_o, wb_dat_o, wb_ack_o, pkt_tx_full,
+  pkt_rx_val, pkt_rx_sop, pkt_rx_mod, pkt_rx_err, pkt_rx_eop,
+  pkt_rx_data, pkt_rx_avail,
   // Inputs
-  xgmii_rxd, xgmii_rxc, wb_we_i, wb_stb_i, wb_rst_i, wb_dat_i, 
-  wb_cyc_i, wb_clk_i, wb_adr_i, reset_xgmii_tx_n, reset_xgmii_rx_n, 
-  reset_156m25_n, pkt_tx_val, pkt_tx_sop, pkt_tx_mod, pkt_tx_eop, 
+  xgmii_rxd, xgmii_rxc, wb_we_i, wb_stb_i, wb_rst_i, wb_dat_i,
+  wb_cyc_i, wb_clk_i, wb_adr_i, reset_xgmii_tx_n, reset_xgmii_rx_n,
+  reset_156m25_n, pkt_tx_val, pkt_tx_sop, pkt_tx_mod, pkt_tx_eop,
   pkt_tx_data, pkt_rx_ren, clk_xgmii_tx, clk_xgmii_rx, clk_156m25
   );
 
@@ -94,6 +94,10 @@ output [63:0]           xgmii_txd;              // From tx_dq0 of tx_dequeue.v
 
 /*AUTOWIRE*/
 // Beginning of automatic wires (for undeclared instantiated-module outputs)
+wire                    clear_stats_rx_octets;  // From wishbone_if0 of wishbone_if.v
+wire                    clear_stats_rx_pkts;    // From wishbone_if0 of wishbone_if.v
+wire                    clear_stats_tx_octets;  // From wishbone_if0 of wishbone_if.v
+wire                    clear_stats_tx_pkts;    // From wishbone_if0 of wishbone_if.v
 wire                    ctrl_tx_enable;         // From wishbone_if0 of wishbone_if.v
 wire                    ctrl_tx_enable_ctx;     // From sync_clk_xgmii_tx0 of sync_clk_xgmii_tx.v
 wire [1:0]              local_fault_msg_det;    // From rx_eq0 of rx_enqueue.v
@@ -115,10 +119,18 @@ wire [7:0]              rxhfifo_rstatus;        // From rx_hold_fifo0 of rx_hold
 wire [63:0]             rxhfifo_wdata;          // From rx_eq0 of rx_enqueue.v
 wire                    rxhfifo_wen;            // From rx_eq0 of rx_enqueue.v
 wire [7:0]              rxhfifo_wstatus;        // From rx_eq0 of rx_enqueue.v
+wire [13:0]             rxsfifo_wdata;          // From rx_eq0 of rx_enqueue.v
+wire                    rxsfifo_wen;            // From rx_eq0 of rx_enqueue.v
+wire [31:0]             stats_rx_octets;        // From stats0 of stats.v
+wire [31:0]             stats_rx_pkts;          // From stats0 of stats.v
+wire [31:0]             stats_tx_octets;        // From stats0 of stats.v
+wire [31:0]             stats_tx_pkts;          // From stats0 of stats.v
 wire                    status_crc_error;       // From sync_clk_wb0 of sync_clk_wb.v
 wire                    status_crc_error_tog;   // From rx_eq0 of rx_enqueue.v
 wire                    status_fragment_error;  // From sync_clk_wb0 of sync_clk_wb.v
 wire                    status_fragment_error_tog;// From rx_eq0 of rx_enqueue.v
+wire                    status_lenght_error;    // From sync_clk_wb0 of sync_clk_wb.v
+wire                    status_lenght_error_tog;// From rx_eq0 of rx_enqueue.v
 wire                    status_local_fault;     // From sync_clk_wb0 of sync_clk_wb.v
 wire                    status_local_fault_crx; // From fault_sm0 of fault_sm.v
 wire                    status_local_fault_ctx; // From sync_clk_xgmii_tx0 of sync_clk_xgmii_tx.v
@@ -155,6 +167,8 @@ wire [63:0]             txhfifo_wdata;          // From tx_dq0 of tx_dequeue.v
 wire                    txhfifo_wen;            // From tx_dq0 of tx_dequeue.v
 wire                    txhfifo_wfull;          // From tx_hold_fifo0 of tx_hold_fifo.v
 wire [7:0]              txhfifo_wstatus;        // From tx_dq0 of tx_dequeue.v
+wire [13:0]             txsfifo_wdata;          // From tx_dq0 of tx_dequeue.v
+wire                    txsfifo_wen;            // From tx_dq0 of tx_dequeue.v
 // End of automatics
 
 rx_enqueue rx_eq0(/*AUTOINST*/
@@ -170,8 +184,11 @@ rx_enqueue rx_eq0(/*AUTOINST*/
                   .remote_fault_msg_det (remote_fault_msg_det[1:0]),
                   .status_crc_error_tog (status_crc_error_tog),
                   .status_fragment_error_tog(status_fragment_error_tog),
+                  .status_lenght_error_tog(status_lenght_error_tog),
                   .status_rxdfifo_ovflow_tog(status_rxdfifo_ovflow_tog),
                   .status_pause_frame_rx_tog(status_pause_frame_rx_tog),
+                  .rxsfifo_wen          (rxsfifo_wen),
+                  .rxsfifo_wdata        (rxsfifo_wdata[13:0]),
                   // Inputs
                   .clk_xgmii_rx         (clk_xgmii_rx),
                   .reset_xgmii_rx_n     (reset_xgmii_rx_n),
@@ -202,37 +219,37 @@ rx_dequeue rx_dq0(/*AUTOINST*/
                   .rxdfifo_rempty       (rxdfifo_rempty),
                   .rxdfifo_ralmost_empty(rxdfifo_ralmost_empty),
                   .pkt_rx_ren           (pkt_rx_ren));
-   
+
 rx_data_fifo rx_data_fifo0(/*AUTOINST*/
                            // Outputs
-                           .rxdfifo_wfull(rxdfifo_wfull),
-                           .rxdfifo_rdata(rxdfifo_rdata[63:0]),
-                           .rxdfifo_rstatus(rxdfifo_rstatus[7:0]),
-                           .rxdfifo_rempty(rxdfifo_rempty),
+                           .rxdfifo_wfull       (rxdfifo_wfull),
+                           .rxdfifo_rdata       (rxdfifo_rdata[63:0]),
+                           .rxdfifo_rstatus     (rxdfifo_rstatus[7:0]),
+                           .rxdfifo_rempty      (rxdfifo_rempty),
                            .rxdfifo_ralmost_empty(rxdfifo_ralmost_empty),
                            // Inputs
-                           .clk_xgmii_rx(clk_xgmii_rx),
-                           .clk_156m25  (clk_156m25),
-                           .reset_xgmii_rx_n(reset_xgmii_rx_n),
-                           .reset_156m25_n(reset_156m25_n),
-                           .rxdfifo_wdata(rxdfifo_wdata[63:0]),
-                           .rxdfifo_wstatus(rxdfifo_wstatus[7:0]),
-                           .rxdfifo_wen (rxdfifo_wen),
-                           .rxdfifo_ren (rxdfifo_ren));
+                           .clk_xgmii_rx        (clk_xgmii_rx),
+                           .clk_156m25          (clk_156m25),
+                           .reset_xgmii_rx_n    (reset_xgmii_rx_n),
+                           .reset_156m25_n      (reset_156m25_n),
+                           .rxdfifo_wdata       (rxdfifo_wdata[63:0]),
+                           .rxdfifo_wstatus     (rxdfifo_wstatus[7:0]),
+                           .rxdfifo_wen         (rxdfifo_wen),
+                           .rxdfifo_ren         (rxdfifo_ren));
 
 rx_hold_fifo rx_hold_fifo0(/*AUTOINST*/
                            // Outputs
-                           .rxhfifo_rdata(rxhfifo_rdata[63:0]),
-                           .rxhfifo_rstatus(rxhfifo_rstatus[7:0]),
-                           .rxhfifo_rempty(rxhfifo_rempty),
+                           .rxhfifo_rdata       (rxhfifo_rdata[63:0]),
+                           .rxhfifo_rstatus     (rxhfifo_rstatus[7:0]),
+                           .rxhfifo_rempty      (rxhfifo_rempty),
                            .rxhfifo_ralmost_empty(rxhfifo_ralmost_empty),
                            // Inputs
-                           .clk_xgmii_rx(clk_xgmii_rx),
-                           .reset_xgmii_rx_n(reset_xgmii_rx_n),
-                           .rxhfifo_wdata(rxhfifo_wdata[63:0]),
-                           .rxhfifo_wstatus(rxhfifo_wstatus[7:0]),
-                           .rxhfifo_wen (rxhfifo_wen),
-                           .rxhfifo_ren (rxhfifo_ren));
+                           .clk_xgmii_rx        (clk_xgmii_rx),
+                           .reset_xgmii_rx_n    (reset_xgmii_rx_n),
+                           .rxhfifo_wdata       (rxhfifo_wdata[63:0]),
+                           .rxhfifo_wstatus     (rxhfifo_wstatus[7:0]),
+                           .rxhfifo_wen         (rxhfifo_wen),
+                           .rxhfifo_ren         (rxhfifo_ren));
 
 tx_enqueue tx_eq0 (/*AUTOINST*/
                    // Outputs
@@ -262,6 +279,8 @@ tx_dequeue tx_dq0(/*AUTOINST*/
                   .xgmii_txd            (xgmii_txd[63:0]),
                   .xgmii_txc            (xgmii_txc[7:0]),
                   .status_txdfifo_udflow_tog(status_txdfifo_udflow_tog),
+                  .txsfifo_wen          (txsfifo_wen),
+                  .txsfifo_wdata        (txsfifo_wdata[13:0]),
                   // Inputs
                   .clk_xgmii_tx         (clk_xgmii_tx),
                   .reset_xgmii_tx_n     (reset_xgmii_tx_n),
@@ -281,37 +300,37 @@ tx_dequeue tx_dq0(/*AUTOINST*/
 
 tx_data_fifo tx_data_fifo0(/*AUTOINST*/
                            // Outputs
-                           .txdfifo_wfull(txdfifo_wfull),
+                           .txdfifo_wfull       (txdfifo_wfull),
                            .txdfifo_walmost_full(txdfifo_walmost_full),
-                           .txdfifo_rdata(txdfifo_rdata[63:0]),
-                           .txdfifo_rstatus(txdfifo_rstatus[7:0]),
-                           .txdfifo_rempty(txdfifo_rempty),
+                           .txdfifo_rdata       (txdfifo_rdata[63:0]),
+                           .txdfifo_rstatus     (txdfifo_rstatus[7:0]),
+                           .txdfifo_rempty      (txdfifo_rempty),
                            .txdfifo_ralmost_empty(txdfifo_ralmost_empty),
                            // Inputs
-                           .clk_xgmii_tx(clk_xgmii_tx),
-                           .clk_156m25  (clk_156m25),
-                           .reset_xgmii_tx_n(reset_xgmii_tx_n),
-                           .reset_156m25_n(reset_156m25_n),
-                           .txdfifo_wdata(txdfifo_wdata[63:0]),
-                           .txdfifo_wstatus(txdfifo_wstatus[7:0]),
-                           .txdfifo_wen (txdfifo_wen),
-                           .txdfifo_ren (txdfifo_ren));
+                           .clk_xgmii_tx        (clk_xgmii_tx),
+                           .clk_156m25          (clk_156m25),
+                           .reset_xgmii_tx_n    (reset_xgmii_tx_n),
+                           .reset_156m25_n      (reset_156m25_n),
+                           .txdfifo_wdata       (txdfifo_wdata[63:0]),
+                           .txdfifo_wstatus     (txdfifo_wstatus[7:0]),
+                           .txdfifo_wen         (txdfifo_wen),
+                           .txdfifo_ren         (txdfifo_ren));
 
 tx_hold_fifo tx_hold_fifo0(/*AUTOINST*/
                            // Outputs
-                           .txhfifo_wfull(txhfifo_wfull),
+                           .txhfifo_wfull       (txhfifo_wfull),
                            .txhfifo_walmost_full(txhfifo_walmost_full),
-                           .txhfifo_rdata(txhfifo_rdata[63:0]),
-                           .txhfifo_rstatus(txhfifo_rstatus[7:0]),
-                           .txhfifo_rempty(txhfifo_rempty),
+                           .txhfifo_rdata       (txhfifo_rdata[63:0]),
+                           .txhfifo_rstatus     (txhfifo_rstatus[7:0]),
+                           .txhfifo_rempty      (txhfifo_rempty),
                            .txhfifo_ralmost_empty(txhfifo_ralmost_empty),
                            // Inputs
-                           .clk_xgmii_tx(clk_xgmii_tx),
-                           .reset_xgmii_tx_n(reset_xgmii_tx_n),
-                           .txhfifo_wdata(txhfifo_wdata[63:0]),
-                           .txhfifo_wstatus(txhfifo_wstatus[7:0]),
-                           .txhfifo_wen (txhfifo_wen),
-                           .txhfifo_ren (txhfifo_ren));
+                           .clk_xgmii_tx        (clk_xgmii_tx),
+                           .reset_xgmii_tx_n    (reset_xgmii_tx_n),
+                           .txhfifo_wdata       (txhfifo_wdata[63:0]),
+                           .txhfifo_wstatus     (txhfifo_wstatus[7:0]),
+                           .txhfifo_wen         (txhfifo_wen),
+                           .txhfifo_ren         (txhfifo_ren));
 
 fault_sm fault_sm0(/*AUTOINST*/
                    // Outputs
@@ -325,20 +344,22 @@ fault_sm fault_sm0(/*AUTOINST*/
 
 sync_clk_wb sync_clk_wb0(/*AUTOINST*/
                          // Outputs
-                         .status_crc_error(status_crc_error),
-                         .status_fragment_error(status_fragment_error),
-                         .status_txdfifo_ovflow(status_txdfifo_ovflow),
-                         .status_txdfifo_udflow(status_txdfifo_udflow),
-                         .status_rxdfifo_ovflow(status_rxdfifo_ovflow),
-                         .status_rxdfifo_udflow(status_rxdfifo_udflow),
-                         .status_pause_frame_rx(status_pause_frame_rx),
-                         .status_local_fault(status_local_fault),
-                         .status_remote_fault(status_remote_fault),
+                         .status_crc_error      (status_crc_error),
+                         .status_fragment_error (status_fragment_error),
+                         .status_lenght_error   (status_lenght_error),
+                         .status_txdfifo_ovflow (status_txdfifo_ovflow),
+                         .status_txdfifo_udflow (status_txdfifo_udflow),
+                         .status_rxdfifo_ovflow (status_rxdfifo_ovflow),
+                         .status_rxdfifo_udflow (status_rxdfifo_udflow),
+                         .status_pause_frame_rx (status_pause_frame_rx),
+                         .status_local_fault    (status_local_fault),
+                         .status_remote_fault   (status_remote_fault),
                          // Inputs
-                         .wb_clk_i      (wb_clk_i),
-                         .wb_rst_i      (wb_rst_i),
-                         .status_crc_error_tog(status_crc_error_tog),
+                         .wb_clk_i              (wb_clk_i),
+                         .wb_rst_i              (wb_rst_i),
+                         .status_crc_error_tog  (status_crc_error_tog),
                          .status_fragment_error_tog(status_fragment_error_tog),
+                         .status_lenght_error_tog(status_lenght_error_tog),
                          .status_txdfifo_ovflow_tog(status_txdfifo_ovflow_tog),
                          .status_txdfifo_udflow_tog(status_txdfifo_udflow_tog),
                          .status_rxdfifo_ovflow_tog(status_rxdfifo_ovflow_tog),
@@ -353,40 +374,70 @@ sync_clk_xgmii_tx sync_clk_xgmii_tx0(/*AUTOINST*/
                                      .status_local_fault_ctx(status_local_fault_ctx),
                                      .status_remote_fault_ctx(status_remote_fault_ctx),
                                      // Inputs
-                                     .clk_xgmii_tx(clk_xgmii_tx),
-                                     .reset_xgmii_tx_n(reset_xgmii_tx_n),
-                                     .ctrl_tx_enable(ctrl_tx_enable),
+                                     .clk_xgmii_tx      (clk_xgmii_tx),
+                                     .reset_xgmii_tx_n  (reset_xgmii_tx_n),
+                                     .ctrl_tx_enable    (ctrl_tx_enable),
                                      .status_local_fault_crx(status_local_fault_crx),
                                      .status_remote_fault_crx(status_remote_fault_crx));
 
-sync_clk_core sync_clk_core0(/*AUTOINST*/
-                             // Inputs
-                             .clk_xgmii_tx(clk_xgmii_tx),
-                             .reset_xgmii_tx_n(reset_xgmii_tx_n));
+stats stats0(/*AUTOINST*/
+             // Outputs
+             .stats_rx_octets           (stats_rx_octets[31:0]),
+             .stats_rx_pkts             (stats_rx_pkts[31:0]),
+             .stats_tx_octets           (stats_tx_octets[31:0]),
+             .stats_tx_pkts             (stats_tx_pkts[31:0]),
+             // Inputs
+             .clear_stats_rx_octets     (clear_stats_rx_octets),
+             .clear_stats_rx_pkts       (clear_stats_rx_pkts),
+             .clear_stats_tx_octets     (clear_stats_tx_octets),
+             .clear_stats_tx_pkts       (clear_stats_tx_pkts),
+             .clk_xgmii_rx              (clk_xgmii_rx),
+             .clk_xgmii_tx              (clk_xgmii_tx),
+             .reset_xgmii_rx_n          (reset_xgmii_rx_n),
+             .reset_xgmii_tx_n          (reset_xgmii_tx_n),
+             .rxsfifo_wdata             (rxsfifo_wdata[13:0]),
+             .rxsfifo_wen               (rxsfifo_wen),
+             .txsfifo_wdata             (txsfifo_wdata[13:0]),
+             .txsfifo_wen               (txsfifo_wen),
+             .wb_clk_i                  (wb_clk_i),
+             .wb_rst_i                  (wb_rst_i));
+
+//sync_clk_core sync_clk_core0(/*AUTOINST*/
+//                             // Inputs
+//                             .clk_xgmii_tx      (clk_xgmii_tx),
+//                             .reset_xgmii_tx_n  (reset_xgmii_tx_n));
 
 wishbone_if wishbone_if0(/*AUTOINST*/
                          // Outputs
-                         .wb_dat_o      (wb_dat_o[31:0]),
-                         .wb_ack_o      (wb_ack_o),
-                         .wb_int_o      (wb_int_o),
-                         .ctrl_tx_enable(ctrl_tx_enable),
+                         .wb_dat_o              (wb_dat_o[31:0]),
+                         .wb_ack_o              (wb_ack_o),
+                         .wb_int_o              (wb_int_o),
+                         .ctrl_tx_enable        (ctrl_tx_enable),
+                         .clear_stats_tx_octets (clear_stats_tx_octets),
+                         .clear_stats_tx_pkts   (clear_stats_tx_pkts),
+                         .clear_stats_rx_octets (clear_stats_rx_octets),
+                         .clear_stats_rx_pkts   (clear_stats_rx_pkts),
                          // Inputs
-                         .wb_clk_i      (wb_clk_i),
-                         .wb_rst_i      (wb_rst_i),
-                         .wb_adr_i      (wb_adr_i[7:0]),
-                         .wb_dat_i      (wb_dat_i[31:0]),
-                         .wb_we_i       (wb_we_i),
-                         .wb_stb_i      (wb_stb_i),
-                         .wb_cyc_i      (wb_cyc_i),
-                         .status_crc_error(status_crc_error),
-                         .status_fragment_error(status_fragment_error),
-                         .status_txdfifo_ovflow(status_txdfifo_ovflow),
-                         .status_txdfifo_udflow(status_txdfifo_udflow),
-                         .status_rxdfifo_ovflow(status_rxdfifo_ovflow),
-                         .status_rxdfifo_udflow(status_rxdfifo_udflow),
-                         .status_pause_frame_rx(status_pause_frame_rx),
-                         .status_local_fault(status_local_fault),
-                         .status_remote_fault(status_remote_fault));
+                         .wb_clk_i              (wb_clk_i),
+                         .wb_rst_i              (wb_rst_i),
+                         .wb_adr_i              (wb_adr_i[7:0]),
+                         .wb_dat_i              (wb_dat_i[31:0]),
+                         .wb_we_i               (wb_we_i),
+                         .wb_stb_i              (wb_stb_i),
+                         .wb_cyc_i              (wb_cyc_i),
+                         .status_crc_error      (status_crc_error),
+                         .status_fragment_error (status_fragment_error),
+                         .status_lenght_error   (status_lenght_error),
+                         .status_txdfifo_ovflow (status_txdfifo_ovflow),
+                         .status_txdfifo_udflow (status_txdfifo_udflow),
+                         .status_rxdfifo_ovflow (status_rxdfifo_ovflow),
+                         .status_rxdfifo_udflow (status_rxdfifo_udflow),
+                         .status_pause_frame_rx (status_pause_frame_rx),
+                         .status_local_fault    (status_local_fault),
+                         .status_remote_fault   (status_remote_fault),
+                         .stats_tx_octets       (stats_tx_octets[31:0]),
+                         .stats_tx_pkts         (stats_tx_pkts[31:0]),
+                         .stats_rx_octets       (stats_rx_octets[31:0]),
+                         .stats_rx_pkts         (stats_rx_pkts[31:0]));
 
 endmodule
-

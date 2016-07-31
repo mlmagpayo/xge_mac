@@ -35,14 +35,21 @@
 ////                                                              ////
 //////////////////////////////////////////////////////////////////////
 
+// Different synthesis option for FIFOs
+// `define XIL
 
 // CPU Registers
 
-`define CPUREG_CONFIG0      8'h00
-`define CPUREG_INT_PENDING  8'h08
-`define CPUREG_INT_STATUS   8'h0c
-`define CPUREG_INT_MASK     8'h10
+`define CPUREG_CONFIG0        8'h00
+`define CPUREG_INT_PENDING    8'h08
+`define CPUREG_INT_STATUS     8'h0c
+`define CPUREG_INT_MASK       8'h10
 
+`define CPUREG_STATSTXOCTETS 8'h80
+`define CPUREG_STATSTXPKTS   8'h84
+
+`define CPUREG_STATSRXOCTETS 8'h90
+`define CPUREG_STATSRXPKTS   8'h94
 
 // Ethernet codes
 
@@ -51,7 +58,7 @@
 `define SEQUENCE   8'h9c
 `define SFD        8'hd5
 `define START      8'hfb
-`define TERMINATE  8'hfd 	
+`define TERMINATE  8'hfd
 `define ERROR      8'hfe
 
 
@@ -90,10 +97,10 @@
 
 //
 // FIFO Size: 8 * (2^AWIDTH) will be the size in bytes
-//            7 --> 128 entries, 1024 bytes for data fifo
+//            6 --> 128 entries, 512 bytes for data fifo
 //
-`define TX_DATA_FIFO_AWIDTH 7
-`define RX_DATA_FIFO_AWIDTH 7
+`define TX_DATA_FIFO_AWIDTH 6
+`define RX_DATA_FIFO_AWIDTH 6
 
 //
 // FIFO Size: Holding FIFOs are 16 deep
@@ -102,8 +109,23 @@
 `define RX_HOLD_FIFO_AWIDTH 4
 
 
+//
+// FIFO Size: Statistics FIFOs are 16 deep
+//
+`define TX_STAT_FIFO_AWIDTH 4
+`define RX_STAT_FIFO_AWIDTH 4
+
+
 // Memory types
 `define MEM_AUTO_SMALL 1
 `define MEM_AUTO_MEDIUM 2
 
 
+// Changed system packet interface to big endian (12/12/2009)
+// Comment out to use legacy mode
+`define BIGENDIAN
+
+// MAX FRAME SIZE
+// Frames received with longer lenght will be marked as "errored" and the pkt_rx_err
+// signal will be assert. Lenght includes CRC.
+`define MAX_FRAME_SIZE 14'd16000

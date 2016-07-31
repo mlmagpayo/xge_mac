@@ -54,6 +54,7 @@ sc_fifo<packet_t*> * pkt_if::get_rx_fifo_ptr() {
 
 void pkt_if::init(void) {
     disable_rx = false;
+    flush_rx = false;
     allow_rx_sop_err = false;
 }
 
@@ -80,14 +81,14 @@ void pkt_if::transmit() {
 
             for (int i = 0; i < pkt->length; i += 8) {
 
-                pkt_tx_data = pkt->data[i+7] << 56 |
-                    pkt->data[i+6] << 48 |
-                    pkt->data[i+5] << 40 |
-                    pkt->data[i+4] << 32 |
-                    pkt->data[i+3] << 24 |
-                    pkt->data[i+2] << 16 |
-                    pkt->data[i+1] << 8 |
-                    pkt->data[i];
+                pkt_tx_data = pkt->data[i] << 56 |
+                    pkt->data[i+1] << 48 |
+                    pkt->data[i+2] << 40 |
+                    pkt->data[i+3] << 32 |
+                    pkt->data[i+4] << 24 |
+                    pkt->data[i+5] << 16 |
+                    pkt->data[i+6] << 8 |
+                    pkt->data[i+7];
 
                 if (i == 0) {
                     pkt_tx_sop = 1;
@@ -116,9 +117,9 @@ void pkt_if::transmit() {
             sb->notify_packet_tx(sb_id, pkt);
 
             //---
-            // Enforce minimum spacing between SOP's
+            // Wait for room in the FIFO before processing next packet
 
-            for (int i = (pkt->length+7)/8; i < 8; i++) {
+            while (pkt_tx_full) {
                 wait();
             }
         }
@@ -132,6 +133,8 @@ void pkt_if::receive() {
 
     sc_uint<64> data;
 
+    bool flush;
+
     wait();
 
     while (true) {
@@ -140,6 +143,8 @@ void pkt_if::receive() {
 
             pkt = new(packet_t);
             pkt->length = 0;
+            pkt->err_flags = 0;
+            flush = false;
 
             // If reading already selected just keep going,
             // if not we must enable ren
@@ -181,9 +186,9 @@ void pkt_if::receive() {
 
                 for (int lane = 0; lane < 8; lane++) {
 
-                    pkt->data[pkt->length++] = (data >> (8 * lane)) & 0xff;
+                    pkt->data[pkt->length++] = (data >> (8 * (7-lane))) & 0xff;
 
-                    if (pkt->length >= 10000) {
+                    if (pkt->length >= 17000) {
                         cout << "ERROR: Packet too long" << endl;
                         sc_stop();
                     }
@@ -194,10 +199,14 @@ void pkt_if::receive() {
                 }
 
                 // Stop on EOP
-                
+
                 if (pkt_rx_eop) {
                     break;
                 }
+            }
+
+            if (flush_rx && pkt->err_flags) {
+                flush = true;
             }
 
             //---
@@ -211,12 +220,14 @@ void pkt_if::receive() {
             //---
             // Pass packet to scoreboard
 
-            sb->notify_packet_rx(sb_id, pkt);
+            if (!flush) {
+                sb->notify_packet_rx(sb_id, pkt);
+            }
 
         }
         else {
             pkt_rx_ren = 0;
-            wait();        
+            wait();
         }
     }
 };

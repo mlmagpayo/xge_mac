@@ -40,6 +40,8 @@
 
 #include "systemc.h"
 
+#include "sc_defines.h"
+
 #include "sc_packet.h"
 #include "sc_scoreboard.h"
 
@@ -54,7 +56,7 @@ SC_MODULE(pkt_if) {
 
     sc_in<bool> reset_156m25_n;
 
-    sc_out<sc_bv<64> > pkt_tx_data;
+    sc_out<vluint64_t > pkt_tx_data;
     sc_out<bool> pkt_tx_eop;
     sc_out<unsigned int> pkt_tx_mod;
     sc_out<bool> pkt_tx_sop;
@@ -63,7 +65,7 @@ SC_MODULE(pkt_if) {
     sc_in<bool> pkt_tx_full;
 
     sc_in<bool> pkt_rx_avail;
-    sc_in<sc_bv<64> > pkt_rx_data;
+    sc_in<vluint64_t > pkt_rx_data;
     sc_in<bool> pkt_rx_eop;
     sc_in<unsigned int> pkt_rx_mod;
     sc_in<bool> pkt_rx_err;
@@ -89,6 +91,7 @@ SC_MODULE(pkt_if) {
     // Variables
 
     bool disable_rx;
+    bool flush_rx;
     bool allow_rx_sop_err;
 
     //---
